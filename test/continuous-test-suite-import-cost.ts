@@ -46,6 +46,8 @@ const LAZY_PACKAGES = [
   "ajv",
   "cross-spawn",
   "google-auth-library",
+  "undici",
+  "jose",
 ];
 
 const PROBE = `
