@@ -647,6 +647,7 @@
     "typesafe-ai",
     "laya",
     "xor",
+    "perplexity-decider",
     "jev",
     "model-routing",
     "semantic-router",
