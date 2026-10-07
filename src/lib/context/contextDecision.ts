@@ -128,8 +128,8 @@ export async function selectIrrelevantMessages(
       type: "boolean",
       instructions: RELEVANCE_INSTRUCTIONS,
       criteria: {
-        true: `The current request depends on this message: "${preview(entry.message)}"`,
-        false: "The current request does not depend on this message.",
+        true: `The current request depends on conversation[${position}].`,
+        false: `The current request does not depend on conversation[${position}].`,
       },
     };
   });
@@ -283,7 +283,7 @@ export async function summaryPreservesContext(
   return true;
 }
 
-/** Bounded text for one message, used in both state and criteria. */
+/** Bounded text stored once in decision state and referenced by position. */
 function preview(message: ChatMessage): string {
   return message.content.slice(0, MAX_MESSAGE_CHARS);
 }

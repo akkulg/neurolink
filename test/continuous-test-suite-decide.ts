@@ -1462,6 +1462,58 @@ await test("9.5 — question keys round-trip distinctly", async () => {
   );
 });
 
+await test("9.6 — tool routing serializes each server capability once", async () => {
+  let requestJson = "";
+  let questionsJson = "";
+
+  const outcome = await selectServersByDecision(
+    "open a pull request",
+    CATALOG,
+    async (options) => {
+      requestJson = JSON.stringify({
+        state: options.state,
+        questions: options.questions,
+      });
+      questionsJson = JSON.stringify(options.questions);
+      return {
+        model: "test-decider",
+        provider: "test",
+        answers: Object.fromEntries(
+          Object.keys(options.questions).map((id) => [
+            id,
+            { type: "boolean" as const, probability: 0 },
+          ]),
+        ),
+        usage: { inputTokens: 0, outputTokens: 0 },
+        latencyMs: 0,
+      };
+    },
+  );
+
+  assert(outcome !== null, "the captured routing decision produced no outcome");
+  assert(
+    questionsJson.includes('"true":"Needed."') &&
+      questionsJson.includes('"false":"Not needed."'),
+    "routing questions did not use compact decision criteria",
+  );
+  CATALOG.forEach((server, index) => {
+    const capabilityOccurrences =
+      requestJson.split(server.description).length - 1;
+    assert(
+      capabilityOccurrences === 1,
+      "a server capability was duplicated in the routing request",
+    );
+    assert(
+      !questionsJson.includes(server.description),
+      "a server capability was copied into its question",
+    );
+    assert(
+      questionsJson.includes(`available_servers[${index}].does`),
+      "a routing question did not reference its indexed capability",
+    );
+  });
+});
+
 // ───────────────────────────────────────────────────────────────────────────
 logSection("10. Context relevance — Stage 0 of compaction");
 // ───────────────────────────────────────────────────────────────────────────
@@ -1533,6 +1585,58 @@ await test("10.2 — an empty request is never acted on", async () => {
     result === null,
     "relevance ran with no request to judge relevance against",
   );
+});
+
+await test("10.2b — context relevance serializes each message once", async () => {
+  let requestJson = "";
+  let questionsJson = "";
+
+  const result = await selectIrrelevantMessages(
+    TRANSCRIPT,
+    "What retry budget did we settle on for the payments worker?",
+    async (options) => {
+      requestJson = JSON.stringify({
+        state: options.state,
+        questions: options.questions,
+      });
+      questionsJson = JSON.stringify(options.questions);
+      return {
+        model: "test-decider",
+        provider: "test",
+        answers: Object.fromEntries(
+          Object.keys(options.questions).map((id) => [
+            id,
+            { type: "boolean" as const, probability: 0 },
+          ]),
+        ),
+        usage: { inputTokens: 0, outputTokens: 0 },
+        latencyMs: 0,
+      };
+    },
+    { protectRecent: 0 },
+  );
+
+  assert(result !== null, "the captured relevance decision produced no result");
+  new Set(TRANSCRIPT.map((message) => message.content)).forEach((content) => {
+    const expectedOccurrences = TRANSCRIPT.filter(
+      (message) => message.content === content,
+    ).length;
+    const messageOccurrences = requestJson.split(content).length - 1;
+    assert(
+      messageOccurrences === expectedOccurrences,
+      "a conversation message was duplicated in the relevance request",
+    );
+    assert(
+      !questionsJson.includes(content),
+      "a conversation message was copied into its question",
+    );
+  });
+  TRANSCRIPT.forEach((_, index) => {
+    assert(
+      questionsJson.includes(`conversation[${index}]`),
+      "a relevance question did not reference its indexed message",
+    );
+  });
 });
 
 await test("10.3 — live: chatter is dropped and the decision is kept", async () => {

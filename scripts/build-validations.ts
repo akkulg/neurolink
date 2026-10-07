@@ -31,7 +31,7 @@ type BoundedRun = {
  * Run a command in its OWN PROCESS GROUP and kill the whole group on timeout.
  *
  * Why not `execSync` with a `timeout`: that signal reaches only the shell it
- * spawned. The work here is `npx -> tsx -> node -> gitleaks`, none of which are
+ * spawned. The work here is `pnpm -> tsx -> node -> gitleaks`, none of which are
  * in the parent's group, so they survive the kill as orphans and keep scanning
  * a repo nobody is waiting on any more. `spawnSync` has the same limit — its
  * timeout kills the child pid alone.
@@ -227,9 +227,12 @@ class NeuroLinkBuildValidator {
     try {
       // Use the consolidated security-check.ts for professional secret detection
       const securityCheckScript = path.join(__dirname, "security-check.ts");
+      // Stay inside pnpm's lifecycle environment. `npx` injects
+      // npm_config_workspaces=false, which makes the nested `pnpm audit` abort
+      // with "packages field missing or empty" before producing its JSON report.
       const run = await runBounded(
-        "npx",
-        ["tsx", securityCheckScript],
+        "pnpm",
+        ["exec", "tsx", securityCheckScript],
         { cwd: this.rootDir, timeoutMs: SECURITY_SCAN_TIMEOUT_MS },
       );
 
