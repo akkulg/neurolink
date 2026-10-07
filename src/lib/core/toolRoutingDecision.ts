@@ -60,42 +60,23 @@ const MAX_SERVERS = 200;
 /**
  * The question wording, and why it is this wording.
  *
- * The obvious phrasing — "answering this request will require calling at least
- * one tool from this server", with a `false` criterion reading "this server is
- * unrelated, OR the request needs no tool at all" — was measured against a
- * 10-request × 5-server labelled set. It separated correctly but weakly:
- * unrelated servers averaged p=0.31 and reached 0.80, so at the 0.6 drop bar
- * only 12 of 39 unneeded servers were dropped.
- *
- * Naming the server, asking in the present tense about what carrying out the
- * request *involves*, and splitting the bundled `false` criterion into a single
- * claim moved unrelated servers to a mean of p=0.03 with a maximum of 0.35 —
- * **37 of 39** dropped at the same bar, still with zero wrong drops.
- *
- * The lesson generalises: a decision model reads literally, and an `or` in a
- * criterion is two questions wearing one coat.
+ * The server capability already exists once in structured state. Referencing
+ * that indexed field avoids copying the same long description into the
+ * instruction and both criteria while still binding each question to one
+ * concrete server.
  */
-function serverQuestion(server: ToolRoutingCatalogEntry): DecisionQuestion {
-  const does = uncapitalize(describeServer(server));
+function serverQuestion(
+  server: ToolRoutingCatalogEntry,
+  index: number,
+): DecisionQuestion {
   return {
     type: "boolean",
-    instructions: `The request needs the "${server.id}" server, which can ${does}.`,
+    instructions: `Does the request need the "${server.id}" server? Read available_servers[${index}].does.`,
     criteria: {
-      true: `Carrying out the request involves ${does}.`,
-      false: `The request is about something else; nothing it asks for involves ${does}.`,
+      true: "Needed.",
+      false: "Not needed.",
     },
   };
-}
-
-/**
- * Lowercase only the FIRST character. A plain `toLowerCase()` would turn
- * "Read and write GitHub issues" into "…github issues", and the proper noun is
- * often the strongest signal in the sentence.
- */
-function uncapitalize(text: string): string {
-  // charAt rather than an index: it returns "" for an empty string, so this
-  // needs no length guard and no non-null assertion.
-  return text.charAt(0).toLowerCase() + text.slice(1);
 }
 
 /**
@@ -118,7 +99,10 @@ export async function selectServersByDecision(
   const servers = routableServers.slice(0, MAX_SERVERS);
   const questions: Record<string, DecisionQuestion> = {};
   servers.forEach((server, index) => {
-    questions[decisionKey(SERVER_NAMESPACE, index)] = serverQuestion(server);
+    questions[decisionKey(SERVER_NAMESPACE, index)] = serverQuestion(
+      server,
+      index,
+    );
   });
 
   const result = await decide({
